@@ -1,5 +1,6 @@
 import ast
 import json
+from unicodedata import ucnhash_CAPI
 from lark import v_args
 from query import QueryFilter
 from bs4 import BeautifulSoup
@@ -9,6 +10,8 @@ import re
 import os
 import requests
 import glob
+
+from template import TemplatedString
 
 class Fimfarchive:
     def __init__(self, unpacked_path):
@@ -396,3 +399,24 @@ class TagFilter(QueryFilter):
             print(f'warning: no match for tag pattern {category}:{pattern}')
         
         return result
+
+TEMPLATED_STRING_CUSTOMIZATIONS = r'''
+custom_field : "chapter_text" -> chapter_text
+'''
+
+@v_args(inline=True)
+class TemplatedStoryString(TemplatedString):
+    def __init__(self, fimfarchive):
+        super().__init__(TEMPLATED_STRING_CUSTOMIZATIONS, require_custom_fn=False)
+        self.unpacked_path = fimfarchive.unpacked_path
+    
+    def chapter_text(self):
+        story_id = self.data['id']
+        gen = lambda indexes: read_chapter(self.unpacked_path, story_id, indexes['.chapters'])
+        requirements = {'.chapters.text'}
+        return gen, requirements
+
+def read_chapter(unpacked_path, story_id, chapter):
+    chapter_path = os.path.join(unpacked_path, 'txt', str(story_id), f'{chapter}.txt')
+    with open(chapter_path, encoding='utf8') as inp:
+        return inp.read()

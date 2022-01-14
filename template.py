@@ -2,24 +2,32 @@ import ast
 import lark
 import itertools
 
-embed_parser = lark.Lark(r'''
+embed_header = r'''
 %ignore " "
 %import common.ESCAPED_STRING
 %import common.CNAME
 
 start : "{" embed "}" REST?
+'''
 
+embed_def = r'''
 ?embed : join
        | data
+       '''
 
+standard_fns = r'''
 join : "join" data "with" string
+'''
 
+data_header = r'''
 ?data : string
 
 ?string : string_atom
         | string_atom string
 
-?string_atom : FIELD          -> field
+?string_atom : '''
+
+standard_data = r'''FIELD          -> field
              | ESCAPED_STRING -> esc_string
              | prod
 
@@ -28,14 +36,74 @@ prod : ESCAPED_STRING "*" COUNT
 FIELD : ("." CNAME)+
 COUNT : /\d+/
 REST : /.+/s
-''', parser='earley')
+'''
 
+def create_embed_parser(embed_customizations, require_custom_fn=True, require_custom_field=True):
+    grammar_parts = [embed_header, embed_def]
+    if require_custom_fn:
+        grammar_parts.append('| custom_fn')
+    grammar_parts.append(embed_customizations)
+    grammar_parts.append(standard_fns)
+    grammar_parts.append(data_header)
+    if require_custom_field:
+        grammar_parts.append('custom_field\n | ')
+    grammar_parts.append(standard_data)
+
+    grammar = ''.join(grammar_parts)
+    return lark.Lark(grammar, parser='earley')
+    
 @lark.v_args(inline=True)
-class Embed(lark.Transformer):
-    def __init__(self, data):
-        self.data = data
-        self.requirements = set()
+class TemplatedString(lark.Transformer):
+    def __init__(self, customizations, require_custom_fn=True, require_custom_field=True):
+        self.data = None
+        self.requirements = None
+        self.parser = create_embed_parser(customizations, require_custom_fn, require_custom_field)
+        self.endpos = -1
+    
+    def parse(self, template, data):
+        startpos = 0
+        result = []
+        while startpos < len(template) - 1:
+            # find the start of the template piece
+            try:
+                next_candidate = startpos + template[startpos:].index('{')
+            except:
+                result.append(template[startpos:])
+                break
+            
+            # add all the crud before the template directly to the output
+            if next_candidate != startpos:
+                result.append(template[startpos:next_candidate])
+                startpos = next_candidate
 
+            # convert the template piece into a string
+            try:
+                self.data = data
+                self.requirements = set()
+                parsed_template = self.parser.parse(template[startpos:])
+                fill_text = self.transform(parsed_template)
+
+                # find the end of the template
+                if len(parsed_template.children) == 1:
+                    endpos = len(template) - 1
+                else:
+                    endpos = startpos + parsed_template.children[1].start_pos
+                while template[endpos] != '}':
+                    endpos -= 1
+            except lark.exceptions.UnexpectedCharacters as e:
+                print('lark exception:', e)
+                fill_text = None
+                endpos = 0
+
+            # append the templated string and move the cursor to the next character
+            if fill_text:
+                result.append(fill_text)
+                startpos = endpos + 1
+            else:
+                result.append(template[startpos])
+                startpos += 1
+
+        return ''.join(result)
 
     def start(self, embed, rest=None):
         return embed[0]({})
@@ -142,51 +210,6 @@ def create_iterator(data, requirements):
     all_fields = get_field_tree(requirements)
     all_lists = sorted(get_lists(data, all_fields))
 
-    print(all_lists)
-
     assert len(all_lists) == 1
-    for idx in range(len(all_lists[0])):
+    for idx in range(len(get_field(all_lists[0], data, {}))):
       yield {all_lists[0]: idx}
-
-
-def try_filling_template(template, data):
-  try:
-    start_token = embed_parser.parse(template)
-    result = Embed(data).transform(start_token)
-    if len(start_token.children) == 1:
-      endpos = len(template) - 1
-    else:
-      endpos = start_token.children[1].start_pos
-    
-    while template[endpos] != '}':
-      endpos -= 1
-    
-    return result, endpos + 1
-      
-  except lark.exceptions.UnexpectedCharacters as e:
-    return None, 0
-
-
-def fill_template(template, data):
-  startpos = 0
-  result = []
-  while startpos < len(template) - 1:
-    try:
-      next_candidate = startpos + template[startpos:].index('{')
-    except:
-      result.append(template[startpos:])
-      break
-
-    if next_candidate != startpos:
-      result.append(template[startpos:next_candidate])
-      startpos = next_candidate
-
-    fill_text, offset = try_filling_template(template[startpos:], data)
-    if fill_text:
-      result.append(fill_text)
-      startpos += offset
-    else:
-      result.append(template[startpos])
-      startpos += 1
-    
-  return ''.join(result)
