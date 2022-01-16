@@ -403,6 +403,10 @@ class TemplatedStoryString(TemplatedString):
     def __init__(self, fimfarchive):
         super().__init__(TEMPLATED_STRING_CUSTOMIZATIONS, require_custom_fn=False)
         self.unpacked_path = fimfarchive.unpacked_path
+        self.stories = fimfarchive.stories_by_id
+    
+    def parse(self, template, story_id):
+        return super().parse(template, self.stories[str(story_id)])
     
     def chapter_text(self):
         story_id = self.data['id']
