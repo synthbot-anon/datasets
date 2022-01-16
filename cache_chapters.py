@@ -18,8 +18,8 @@ to avoid spiking memory usage. All of the threads will start within 5 minutes.
 UNPACKED_FIMFARCHIVE_PATH = '/archives/ppp-clone/story-data'
 
 
-import fimfarchive
-import template
+from . import fimfarchive
+from . import template
 import sys
 import time
 import random

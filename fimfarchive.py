@@ -2,7 +2,6 @@ import ast
 import json
 from unicodedata import ucnhash_CAPI
 from lark import v_args
-from query import QueryFilter
 from bs4 import BeautifulSoup
 import ebooklib
 import ebooklib.epub
@@ -11,7 +10,8 @@ import os
 import requests
 import glob
 
-from template import TemplatedString
+from .query import QueryFilter
+from .template import TemplatedString
 
 class Fimfarchive:
     def __init__(self, unpacked_path):
