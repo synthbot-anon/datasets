@@ -45,14 +45,8 @@ class Fimfarchive:
 
                 self.tags_by_id[tag_id] = tag_data
         
-        self.tag_filter = TagFilter(self)
-        self.story_filter = StoryFilter(self)
-    
-    def query_tags(self, query):
-        return self.tag_filter.parse(query)
-    
-    def query_stories(self, query):
-        return self.story_filter.parse(query)
+        self.query_tags = TagFilter(self)
+        self.query_stories = StoryFilter(self)
     
     def get_cached_chapters(self, story_id):
         result = []
