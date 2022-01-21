@@ -29,8 +29,8 @@ union :  query "|" query
 feature_addons = r'''
 comparison : feature_shift comparator feature_shift
 
-?feature_list : feature_atom
-              | feature_atom "," feature_list
+?feature_list : feature_shift
+              | feature_shift "," feature_list
 
 json_feature : JSON_KEY
 
