@@ -9,6 +9,7 @@ import re
 import os
 import requests
 import glob
+import tarfile
 
 from .query import QueryFilter
 from .template import TemplatedString
@@ -26,6 +27,7 @@ class Fimfarchive:
         self.stories_by_tag = {}
         self.stories_by_id = {}
         self.delta_index = {}
+        self.chapter_texts = tarfile.open(os.path.join(unpacked_path, 'txt.tar'))
 
         for story_id, story_data in index.items():
             self.stories_by_id[story_id] = story_data
@@ -51,9 +53,9 @@ class Fimfarchive:
     def get_cached_chapters(self, story_id):
         result = []
         for chapter_index in range(len(self.stories_by_id[story_id]['chapters'])):
-            cache_path = os.path.join(self.unpacked_path, 'txt', story_id, f'{chapter_index}.txt')
-            with open(cache_path) as input:
-                result.append(input.read())
+            cache_path = os.path.join('txt', story_id, f'{chapter_index}.txt')
+            with self.chapter_texts.extractfile(cache_path) as input:
+                result.append(input.read().decode('utf-8'))
         return result
     
     def cache_chapters(self, story_id):
@@ -148,8 +150,7 @@ def get_html_chapters(html_cache_dir):
 
 def cache_html_chapters(chapter_paths, story_cache_path, story_index_data):
     for i, chapter_path in enumerate(chapter_paths):
-        chapter_index = i + 1
-        chapter_cache_path = os.path.join(story_cache_path, f'{chapter_index}.txt')
+        chapter_cache_path = os.path.join(story_cache_path, f'{i}.txt')
         if os.path.exists(chapter_cache_path):
             continue
         
@@ -158,7 +159,7 @@ def cache_html_chapters(chapter_paths, story_cache_path, story_index_data):
         soup = BeautifulSoup(chapter_data, 'html.parser')
 
         title = soup.h3.getText()
-        chapter = list(filter(lambda x: x['chapter_number'] == chapter_index, story_index_data['chapters']))[0]
+        chapter = list(filter(lambda x: x['chapter_number'] == i+1, story_index_data['chapters']))[0]
         if title != chapter['title']:
             print('title mismatch:')
             print('... found', title)
@@ -402,7 +403,7 @@ custom_field : "chapter_text" -> chapter_text
 class TemplatedStoryString(TemplatedString):
     def __init__(self, fimfarchive):
         super().__init__(TEMPLATED_STRING_CUSTOMIZATIONS, require_custom_fn=False)
-        self.unpacked_path = fimfarchive.unpacked_path
+        self.chapter_texts = fimfarchive.chapter_texts
         self.stories = fimfarchive.stories_by_id
     
     def parse(self, template, story_id):
@@ -410,11 +411,12 @@ class TemplatedStoryString(TemplatedString):
     
     def chapter_text(self):
         story_id = self.data['id']
-        gen = lambda indexes: read_chapter(self.unpacked_path, story_id, indexes['.chapters'])
+        gen = lambda indexes: read_chapter(self.chapter_texts, story_id, indexes['.chapters'])
         requirements = {'.chapters.text'}
         return gen, requirements
 
-def read_chapter(unpacked_path, story_id, chapter):
-    chapter_path = os.path.join(unpacked_path, 'txt', str(story_id), f'{chapter}.txt')
-    with open(chapter_path, encoding='utf8') as inp:
-        return inp.read()
+def read_chapter(chapter_texts, story_id, chapter):
+    story_id = str(story_id)
+    chapter_path = os.path.join('txt', story_id, f'{chapter}.txt')
+    with chapter_texts.extractfile(chapter_path) as inp:
+        return inp.read().decode('utf-8')
