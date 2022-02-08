@@ -401,13 +401,18 @@ custom_field : "chapter_text" -> chapter_text
 
 @v_args(inline=True)
 class TemplatedStoryString(TemplatedString):
-    def __init__(self, fimfarchive):
+    def __init__(self, fimfarchive, consistent_quotes=False):
         super().__init__(TEMPLATED_STRING_CUSTOMIZATIONS, require_custom_fn=False)
+        self.consistent_quotes = consistent_quotes
         self.chapter_texts = fimfarchive.chapter_texts
         self.stories = fimfarchive.stories_by_id
-    
+
     def parse(self, template, story_id):
-        return super().parse(template, self.stories[str(story_id)])
+        result = super().parse(template, self.stories[str(story_id)])
+        if self.consistent_quotes:
+            result = re.sub(u'[“”„]', '"', result)
+            result = re.sub(u'[‘’]', "'", result)
+        return result
     
     def chapter_text(self):
         story_id = self.data['id']
